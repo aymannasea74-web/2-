@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مكتبة العمال</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f4f5f7;--card:#fff;--tx:#1b1f24;--mut:#6b7280;--pri:#0f766e;--prit:#fff;--bad:#c2410c;--ok:#15803d;--bd:#e3e5e8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#121416;--card:#1c1f23;--tx:#eceef0;--mut:#9aa1aa;--pri:#2dd4bf;--prit:#06201c;--bad:#fb923c;--ok:#4ade80;--bd:#2c3036}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#121416;--card:#1c1f23;--tx:#eceef0;--mut:#9aa1aa;--pri:#2dd4bf;--prit:#06201c;--bad:#fb923c;--ok:#4ade80;--bd:#2c3036}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;font-size:16px}
+header{position:sticky;top:env(safe-area-inset-top,0px);background:var(--pri);color:var(--prit);padding:14px 16px;display:flex;align-items:center;gap:10px;z-index:5}
+header h1{font-size:18px;margin:0;flex:1}
+header button{background:transparent;color:inherit;border:0;font-size:15px;padding:4px 8px}
+main{padding:14px;max-width:640px;margin:auto}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mut{color:var(--mut);font-size:13px}
+.big{font-size:22px;font-weight:700}
+.bad{color:var(--bad)}.ok{color:var(--ok)}
+button.b{background:var(--pri);color:var(--prit);border:0;border-radius:10px;padding:11px 14px;font-size:15px;font-family:inherit}
+button.s{background:transparent;color:var(--tx);border:1px solid var(--bd);border-radius:10px;padding:9px 12px;font-family:inherit;font-size:14px}
+button.w{width:100%}
+input,select,textarea{width:100%;padding:11px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font-size:16px;font-family:inherit;margin:4px 0 10px}
+label{font-size:13px;color:var(--mut)}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tabs button{flex:1}
+.tabs .on{background:var(--pri);color:var(--prit);border-color:var(--pri)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal div{text-align:center;padding:10px 0;border-radius:9px;background:var(--bg);border:1px solid var(--bd);font-size:15px;user-select:none}
+.cal .h{background:none;border:0;font-size:12px;color:var(--mut);padding:2px}
+.cal .abs{background:var(--bad);color:#fff;border-color:var(--bad)}
+.cal .off{opacity:.3}
+.cal .today{outline:2px solid var(--pri)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.modal>div{background:var(--card);width:100%;max-width:640px;border-radius:18px 18px 0 0;padding:18px;max-height:90vh;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:8px 4px;border-bottom:1px solid var(--bd);text-align:right}
+.sum td:last-child{text-align:left;font-weight:600}
+</style>
+</head>
+<body>
+<header><button id="back" style="display:none">→ رجوع</button><h1 id="ttl">مكتبة العمال</h1><button id="bk">نسخ احتياطي</button></header>
+<main id="app"></main>
+<div id="mod"></div>
+<script>
+const KEY="workers_lib_v1";
+let DB={workers:[]},cur=null,tab="cal",vm=new Date();
+try{const r=localStorage.getItem(KEY);if(r)DB=JSON.parse(r)}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){alert("تعذر الحفظ")}}
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=n=>Math.round(n*100)/100;const money=n=>fmt(n).toLocaleString("en-US");
+const ds=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const pd=s=>{const[a,b,c]=s.split("-").map(Number);return new Date(a,b-1,c)};
+const today=()=>ds(new Date());
+const addD=(s,n)=>{const d=pd(s);d.setDate(d.getDate()+n);return ds(d)};
+const diff=(a,b)=>Math.round((pd(b)-pd(a))/864e5);
+const PN={daily:"يومي",weekly:"أسبوعي",biweekly:"كل أسبوعين",monthly:"شهري"};
+const MN=["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0);
+
+function calc(w,from,to){
+  const t=today();let a=from&&from>w.start?from:w.start,b=to&&to<t?to:t;
+  if(b<a)return{days:0,abs:0,pres:0,earn:0,allow:0,draw:0,pay:0};
+  const days=diff(a,b)+1,abs=w.absent.filter(d=>d>=a&&d<=b).length,pres=days-abs;
+  const inr=x=>x.date>=a&&x.date<=b;
+  return{days,abs,pres,earn:pres*w.wage,allow:pres*(w.allow||0),
+   draw:sum(w.tx.filter(x=>x.type=="draw"&&inr(x)),x=>x.amt),pay:sum(w.tx.filter(x=>x.type=="pay"&&inr(x)),x=>x.amt)};
+}
+const net=c=>c.earn-c.allow-c.draw-c.pay;
+function period(w){
+  const t=today(),d=pd(t);
+  if(w.period=="daily")return[t,t];
+  if(w.period=="weekly"){const o=(d.getDay()+1)%7;const s=addD(t,-o);return[s,addD(s,6)]}
+  if(w.period=="biweekly"){const n=Math.floor(diff(w.start,t)/14);const s=addD(w.start,n*14);return[s,addD(s,13)]}
+  const s=new Date(d.getFullYear(),d.getMonth(),1),e=new Date(d.getFullYear(),d.getMonth()+1,0);return[ds(s),ds(e)];
+}
+
+function home(){
+  cur=null;$("#back").style.display="none";$("#ttl").textContent="مكتبة العمال";
+  const tot=sum(DB.workers,w=>net(calc(w)));
+  $("#app").innerHTML=`<div class="card"><div class="mut">إجمالي المستحق للعمال</div><div class="big">${money(tot)}</div></div>
+  <button class="b w" onclick="wform()" style="margin-bottom:12px">+ إضافة عامل</button>`+
+  (DB.workers.length?DB.workers.map(w=>{const c=calc(w);const n=net(c);return`<div class="card" onclick="open_('${w.id}')"><div class="row"><b>${esc(w.name)}</b><span class="big ${n>=0?"ok":"bad"}">${money(n)}</span></div><div class="mut">أجر يومي ${money(w.wage)} • تسديد ${PN[w.period]} • غياب ${c.abs} يوم</div></div>`}).join(""):`<p class="mut" style="text-align:center">لا يوجد عمال بعد</p>`);
+}
+function open_(id){cur=DB.workers.find(w=>w.id==id);tab="cal";vm=new Date();worker()}
+function worker(){
+  const w=cur;$("#back").style.display="";$("#back").onclick=home;$("#ttl").textContent=w.name;
+  const c=calc(w),n=net(c),[ps,pe]=period(w),pc=calc(w,ps,pe);
+  let h=`<div class="card"><div class="mut">الرصيد المتبقي للعامل</div><div class="big ${n>=0?"ok":"bad"}">${money(n)}</div>
+  <div class="mut" style="margin-top:6px">الفترة الحالية (${PN[w.period]}): ${ps} ← ${pe}<br>صافي الفترة: <b>${money(pc.earn-pc.allow-pc.draw)}</b> (أيام عمل ${pc.pres}، غياب ${pc.abs})</div></div>
+  <div class="row" style="margin-bottom:12px;gap:6px"><button class="b" style="flex:1" onclick="txform('draw')">+ مسحوب</button><button class="b" style="flex:1" onclick="txform('pay')">تسديد أجور</button><button class="s" onclick="wform('${w.id}')">تعديل</button></div>
+  <div class="tabs"><button class="s ${tab=="cal"?"on":""}" onclick="tab='cal';worker()">التقويم</button><button class="s ${tab=="st"?"on":""}" onclick="tab='st';worker()">كشف الحساب</button></div>`;
+  h+=tab=="cal"?calHtml(w):stHtml(w,c);
+  $("#app").innerHTML=h;
+}
+function calHtml(w){
+  const y=vm.getFullYear(),m=vm.getMonth(),first=new Date(y,m,1).getDay(),dim=new Date(y,m+1,0).getDate(),t=today();
+  let g=["سبت","أحد","اثنين","ثلاثاء","أربعاء","خميس","جمعة"].map(x=>`<div class="h">${x}</div>`).join("");
+  for(let i=0;i<(first+1)%7;i++)g+="<div style='visibility:hidden'></div>";
+  for(let d=1;d<=dim;d++){const s=y+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");const off=s<w.start||s>t;
+   g+=`<div class="${w.absent.includes(s)?"abs":""} ${off?"off":""} ${s==t?"today":""}" ${off?"":`onclick="tg('${s}')"`}>${d}</div>`}
+  return`<div class="card"><div class="row" style="margin-bottom:10px"><button class="s" onclick="mv(-1)">→</button><b>${MN[m]} ${y}</b><button class="s" onclick="mv(1)">←</button></div><div class="cal">${g}</div><p class="mut">اضغط على اليوم لتحديد الغياب (باللون البرتقالي). الأيام الأخرى تُحسب حضوراً.</p></div>`;
+}
+function mv(n){vm=new Date(vm.getFullYear(),vm.getMonth()+n,1);worker()}
+function tg(s){const a=cur.absent,i=a.indexOf(s);i>=0?a.splice(i,1):a.push(s);save();worker()}
+function stHtml(w,c){
+  const rows=w.tx.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<tr><td>${x.date}</td><td>${x.type=="pay"?"تسديد":"مسحوب"}${x.note?" - "+esc(x.note):""}</td><td>${money(x.amt)}</td><td><button class="s" onclick="dtx('${x.id}')">×</button></td></tr>`).join("");
+  return`<div class="card"><table class="sum">
+  <tr><td>تاريخ البدء</td><td>${w.start}</td></tr>
+  <tr><td>أيام العمل (${c.pres} × ${money(w.wage)})</td><td>${money(c.earn)}</td></tr>
+  <tr><td>أيام الغياب</td><td>${c.abs}</td></tr>
+  <tr><td>مصروف يومي (${c.pres} × ${money(w.allow||0)})</td><td>-${money(c.allow)}</td></tr>
+  <tr><td>مسحوبات إضافية</td><td>-${money(c.draw)}</td></tr>
+  <tr><td>مبالغ مسددة</td><td>-${money(c.pay)}</td></tr>
+  <tr><td><b>المتبقي</b></td><td><b>${money(net(c))}</b></td></tr></table></div>
+  <div class="card"><b>الحركات</b>${rows?`<table>${rows}</table>`:`<p class="mut">لا توجد حركات</p>`}</div>`;
+}
+function dtx(id){if(confirm("حذف هذه الحركة؟")){cur.tx=cur.tx.filter(x=>x.id!=id);save();worker()}}
+
+function modal(h){$("#mod").innerHTML=`<div class="modal" onclick="if(event.target==this)cm()"><div>${h}</div></div>`}
+function cm(){$("#mod").innerHTML=""}
+function wform(id){
+  const w=id?DB.workers.find(x=>x.id==id):{name:"",wage:"",allow:"",period:"weekly",start:today()};
+  modal(`<h3>${id?"تعديل العامل":"عامل جديد"}</h3>
+  <label>الاسم</label><input id="f1" value="${esc(w.name)}">
+  <label>الأجر اليومي</label><input id="f2" type="number" inputmode="decimal" value="${w.wage}">
+  <label>مصروف يومي مقرر (اختياري)</label><input id="f3" type="number" inputmode="decimal" value="${w.allow}">
+  <label>فترة التسديد</label><select id="f4">${Object.keys(PN).map(k=>`<option value="${k}" ${k==w.period?"selected":""}>${PN[k]}</option>`).join("")}</select>
+  <label>تاريخ بدء العمل</label><input id="f5" type="date" value="${w.start}">
+  <button class="b w" onclick="wsave('${id||""}')">حفظ</button>
+  ${id?`<button class="s w" style="margin-top:8px;color:var(--bad)" onclick="wdel('${id}')">حذف العامل</button>`:""}`);
+}
+function wsave(id){
+  const name=$("#f1").value.trim(),wage=parseFloat($("#f2").value),allow=parseFloat($("#f3").value)||0,period=$("#f4").value,start=$("#f5").value;
+  if(!name||!(wage>=0)||!start)return alert("أدخل الاسم والأجر وتاريخ البدء");
+  if(id){Object.assign(DB.workers.find(x=>x.id==id),{name,wage,allow,period,start})}
+  else DB.workers.push({id:"w"+Date.now(),name,wage,allow,period,start,absent:[],tx:[]});
+  save();cm();id?worker():home();
+}
+function wdel(id){if(confirm("سيتم حذف العامل وكل بياناته. متأكد؟")){DB.workers=DB.workers.filter(x=>x.id!=id);save();cm();home()}}
+function txform(type){
+  const [ps,pe]=period(cur),pc=calc(cur,ps,pe),def=type=="pay"?Math.max(0,fmt(net(calc(cur)))):"";
+  modal(`<h3>${type=="pay"?"تسديد أجور":"مسحوب إضافي"}</h3>
+  <label>المبلغ</label><input id="t1" type="number" inputmode="decimal" value="${def}">
+  <label>التاريخ</label><input id="t2" type="date" value="${today()}">
+  <label>ملاحظة</label><input id="t3">
+  <button class="b w" onclick="txsave('${type}')">حفظ</button>`);
+}
+function txsave(type){
+  const amt=parseFloat($("#t1").value),date=$("#t2").value;
+  if(!(amt>0)||!date)return alert("أدخل المبلغ والتاريخ");
+  cur.tx.push({id:"t"+Date.now(),type,amt,date,note:$("#t3").value.trim()});save();cm();worker();
+}
+$("#bk").onclick=()=>{
+  modal(`<h3>نسخ احتياطي</h3><p class="mut">انسخ النص وخزنه في مكان آمن (ملاحظات أو رسالة لنفسك). للاستعادة الصقه هنا واضغط استعادة.</p>
+  <textarea id="bx" rows="6">${esc(JSON.stringify(DB))}</textarea>
+  <div class="row" style="gap:8px"><button class="b" style="flex:1" onclick="navigator.clipboard&&navigator.clipboard.writeText($('#bx').value).then(()=>alert('تم النسخ'),()=>$('#bx').select())">نسخ</button><button class="s" style="flex:1" onclick="rest()">استعادة</button></div>`);
+};
+function rest(){try{const d=JSON.parse($("#bx").value);if(!Array.isArray(d.workers))throw 0;if(!confirm("سيتم استبدال البيانات الحالية. متأكد؟"))return;DB=d;save();cm();home()}catch(e){alert("النص غير صالح")}}
+home();
+if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+</script>
+</body>
+</html>
